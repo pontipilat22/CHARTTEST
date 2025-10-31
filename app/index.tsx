@@ -6,7 +6,7 @@ export default function HomeScreen() {
   return (
     <View style={styles.container}>
       <Text style={styles.title}>Главная</Text>
-      <Button title="Открыть макет графика" onPress={() => router.push('/chart')} />
+      <Button title="Открыть макет графика" onPress={() => router.push('/Chart')} />
     </View>
   );
 }

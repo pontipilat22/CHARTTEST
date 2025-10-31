@@ -13,13 +13,16 @@ import {
   View,
 } from 'react-native';
 import {
+  ClipPath,
   Defs,
+  G,
   LinearGradient,
   Path,
   RadialGradient,
   Rect,
   Stop,
   Svg,
+  Text as SvgText
 } from 'react-native-svg';
 
 const { width: SCREEN_WIDTH } = Dimensions.get('window');
@@ -33,11 +36,48 @@ const FILL_OPACITY = 0.4;
 const SMOOTHNESS = 0.2;
 const START_X = -32;
 
+// ===== НАСТРОЙКИ ЭФФЕКТА ЛУПЫ =====
+const MAGNIFIED_FONT_SIZE = 58; // Размер увеличенного текста
+const MAGNIFIED_OFFSET_X = -14; // Сдвиг по X относительно обычного текста
+const MAGNIFIED_OFFSET_Y = 28; // Сдвиг по Y относительно обычного текста
+
 type ShadowLayer = 'under-fill' | 'between' | 'over-line';
+
+// Типы для периодов
+type Period = '24h' | '1W' | '1M' | '3M' | '1Y' | 'ALL';
+
+// Тестовые данные для разных периодов
+const periodData: Record<Period, { points: number[]; balance: string }> = {
+  '24h': {
+    points: [40, 26, 22, 72, 82, 80, 88],
+    balance: '$ 11,950',
+  },
+  '1W': {
+    points: [30, 45, 35, 60, 55, 70, 68, 75],
+    balance: '$ 12,450',
+  },
+  '1M': {
+    points: [25, 35, 42, 38, 50, 48, 62, 58, 70, 75],
+    balance: '$ 13,200',
+  },
+  '3M': {
+    points: [20, 25, 30, 28, 35, 40, 45, 50, 55, 60, 65, 70],
+    balance: '$ 14,850',
+  },
+  '1Y': {
+    points: [15, 18, 22, 25, 30, 28, 35, 40, 38, 45, 50, 55, 60, 58, 65, 70],
+    balance: '$ 16,750',
+  },
+  ALL: {
+    points: [10, 12, 15, 18, 20, 25, 30, 35, 40, 45, 50, 55, 60, 65, 70, 75, 78, 82],
+    balance: '$ 18,950',
+  },
+};
 
 const ChartScreen = () => {
   const navigation = useNavigation();
   const [shadowLayer] = React.useState<ShadowLayer>('between');
+  const [activePeriod, setActivePeriod] = React.useState<Period>('24h');
 
   // шрифты
   const [fontsLoaded] = useFonts({
@@ -65,7 +105,9 @@ const ChartScreen = () => {
   const chartHeight = 180;
   const chartBoxWidth = cardWidth;
 
-  const points = [40, 26, 22, 72, 82, 80, 88];
+  // Получаем данные для текущего периода
+  const currentData = periodData[activePeriod];
+  const points = currentData.points;
 
   const paddingX = 0;
   const paddingTop = 26;
@@ -201,7 +243,7 @@ const ChartScreen = () => {
               >
                 <Defs>
                   <LinearGradient id="bgGrad" x1="0" y1="0" x2="0" y2="0.7">
-                    <Stop offset="0" stopColor="#e4e4e4ff" stopOpacity="0.1" />
+                    <Stop offset="0" stopColor="#3170f7ff" stopOpacity="0.1" />
                     <Stop offset="1" stopColor="#FFFFFF" stopOpacity="1" />
                   </LinearGradient>
                 </Defs>
@@ -229,17 +271,21 @@ const ChartScreen = () => {
                 <Rect x="-12" y="-12" width="46" height="46" fill="url(#cornerShade)" />
               </Svg>
 
-              {/* сумма */}
-              <Text style={styles.balanceOnChart}>$ 11,950</Text>
+              {/* Базовый текст обычного размера */}
+              <Text style={styles.balanceOnChart}>{currentData.balance}</Text>
 
-              {/* график */}
+              {/* График */}
               <Svg width={chartBoxWidth} height={chartHeight} style={StyleSheet.absoluteFillObject}>
+                {/* Тени графика */}
                 {shadowLayer === 'under-fill' && renderShadowGroup()}
 
+                {/* Заливка графика - полупрозрачная */}
                 <Path d={area} fill={`rgba(255,255,255,${FILL_OPACITY})`} />
 
+                {/* Тени между заливкой и линией */}
                 {shadowLayer === 'between' && renderShadowGroup()}
 
+                {/* Линия графика */}
                 <Path
                   d={d}
                   stroke="#ffffffa3"
@@ -248,7 +294,34 @@ const ChartScreen = () => {
                   strokeLinecap="round"
                 />
 
+                {/* Тени поверх линии */}
                 {shadowLayer === 'over-line' && renderShadowGroup()}
+              </Svg>
+
+              {/* Увеличенный текст ПОВЕРХ графика, только в области графика */}
+              <Svg
+                width={chartBoxWidth}
+                height={chartHeight}
+                style={StyleSheet.absoluteFillObject}
+                pointerEvents="none"
+              >
+                <Defs>
+                  <ClipPath id="graphClip">
+                    <Path d={area} />
+                  </ClipPath>
+                </Defs>
+                <G clipPath="url(#graphClip)">
+                  <SvgText
+                    x={chartBoxWidth * 0.18 + MAGNIFIED_OFFSET_X}
+                    y={chartHeight * 0.43 - 26 + 54 + MAGNIFIED_OFFSET_Y}
+                    fontSize={MAGNIFIED_FONT_SIZE}
+                    fontFamily="K2D_600SemiBold"
+                    fill="rgba(34,114,255,1)"
+                    fontWeight="700"
+                  >
+                    {currentData.balance}
+                  </SvgText>
+                </G>
               </Svg>
             </View>
 
@@ -269,10 +342,14 @@ const ChartScreen = () => {
 
           {/* табы */}
           <View style={styles.tabsWrapper}>
-            {['24h', '1W', '1M', '3M', '1Y', 'ALL'].map((item, index) => {
-              const active = index === 0;
+            {(['24h', '1W', '1M', '3M', '1Y', 'ALL'] as Period[]).map((item) => {
+              const active = item === activePeriod;
               return (
-                <Pressable key={item} style={[styles.tab, active && styles.tabActive]}>
+                <Pressable
+                  key={item}
+                  style={[styles.tab, active && styles.tabActive]}
+                  onPress={() => setActivePeriod(item)}
+                >
                   <Text style={[styles.tabText, active && styles.tabTextActive]}>
                     {item}
                   </Text>
